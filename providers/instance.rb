@@ -5,10 +5,13 @@ action :configure do
   # this in the resource declaration because node isn't populated yet when
   # that runs
   [:catalina_options, :java_options, :use_security_manager, :authbind,
-   :max_threads, :uriencoding, :ssl_max_threads, :ssl_cert_file, :ssl_key_file,
-   :ssl_chain_files, :keystore_file, :keystore_type, :truststore_file,
-   :truststore_type, :certificate_dn, :loglevel, :tomcat_auth, :client_auth,
-   :user, :group, :tmp_dir, :lib_dir, :endorsed_dir].each do |attr|
+   :max_threads, :ssl_max_threads, :ssl_cert_file, :ssl_key_file, :generate_ssl_cert,
+   :ssl_chain_files, :keystore_file, :keystore_type, :truststore_file, :client_auth,
+   :truststore_type, :certificate_dn, :loglevel, :tomcat_auth, :user, :uriencoding,
+   :group, :tmp_dir, :lib_dir, :endorsed_dir, :jndi_connections, :jndi, :cors_enabled, :redirect_http_to_https,
+   :app_base, :ldap_enabled, :ldap_servers, :ldap_port, :ldap_bind_user, :ldap_bind_pwd,
+   :ldap_user_base, :ldap_role_base, :ldap_domain_name, :ldap_group, :ldap_user_search,
+   :ldap_role_search].each do |attr|
     unless new_resource.instance_variable_get("@#{attr}")
       new_resource.instance_variable_set("@#{attr}", node['tomcat'][attr])
     end
@@ -41,16 +44,16 @@ action :configure do
     # Create the directories, since the OS package wouldn't have
     [:base, :config_dir, :context_dir].each do |attr|
       directory new_resource.instance_variable_get("@#{attr}") do
-        mode '0755'
+        mode '0755' if node.platform_family != 'windows'
         recursive true
       end
     end
     [:log_dir, :work_dir, :webapp_dir].each do |attr|
       directory new_resource.instance_variable_get("@#{attr}") do
-        mode '0755'
+        mode '0755' if node.platform_family != 'windows'
         recursive true
-        user new_resource.user
-        group new_resource.group
+        user new_resource.user if node.platform_family != 'windows'
+        group new_resource.group if node.platform_family != 'windows'
       end
     end
 
@@ -107,7 +110,7 @@ action :configure do
 
   # Even for the base instance, the OS package may not make this directory
   directory new_resource.endorsed_dir do
-    mode '0755'
+    mode '0755' if node.platform_family != 'windows'
     recursive true
   end
 
@@ -164,6 +167,77 @@ action :configure do
       mode '0644'
       notifies :restart, "service[#{instance}]"
     end
+  when 'windows'
+    registry_key "HKLM\\SOFTWARE\\Wow6432Node\\Apache Software Foundation\\Procrun 2.0\\Tomcat#{node.tomcat.base_version}\\Parameters\\Stop" do
+      values [{
+        :name => 'Timeout',
+        :type => :dword,
+        :data => 30
+      }]
+      recursive true
+      notifies :restart, "service[#{instance}]", :delayed
+    end
+
+    java_opts = [
+      "-Dcatalina.home=#{new_resource.home}", "-Dcatalina.base=#{new_resource.base}", "-Djava.endorsed.dirs=#{new_resource.endorsed_dir}", "-Djava.io.tmpdir=#{new_resource.tmp_dir}",
+      "-Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager", "-Djava.util.logging.config.file=#{new_resource.config_dir}\\logging.properties"
+    ]
+
+    max_heap = nil
+    min_heap = nil
+
+    new_resource.java_options.split.each { |opt|
+      if opt.downcase.start_with?("-xmx")
+        max_heap =
+          if opt.downcase.end_with?("g")
+            opt.downcase.gsub(/[^\d]/, '').to_i * 1024
+          elsif opt.downcase.end_with?("m")
+            opt.downcase.gsub(/[^\d]/, '').to_i
+          end
+      elsif opt.downcase.start_with?("-xms")
+        min_heap =
+          if opt.downcase.end_with?("g")
+            opt.downcase.gsub(/[^\d]/, '').to_i * 1024
+          elsif opt.downcase.end_with?("m")
+            opt.downcase.gsub(/[^\d]/, '').to_i
+          end
+      else
+        java_opts << opt
+      end
+    }
+
+    min_heap = 128 if min_heap.nil?
+    max_heap = min_heap if max_heap.nil?
+
+    registry_key "HKLM\\SOFTWARE\\Wow6432Node\\Apache Software Foundation\\Procrun 2.0\\Tomcat#{node.tomcat.base_version}\\Parameters\\Java" do
+      values [{
+        :name => 'JvmMs',
+        :type => :dword,
+        :data => min_heap
+      }]
+      recursive true
+      notifies :restart, "service[#{instance}]", :delayed
+    end
+
+    registry_key "HKLM\\SOFTWARE\\Wow6432Node\\Apache Software Foundation\\Procrun 2.0\\Tomcat#{node.tomcat.base_version}\\Parameters\\Java" do
+      values [{
+        :name => 'JvmMx',
+        :type => :dword,
+        :data => max_heap
+      }]
+      recursive true
+      notifies :restart, "service[#{instance}]", :delayed
+    end
+
+    registry_key "HKLM\\SOFTWARE\\Wow6432Node\\Apache Software Foundation\\Procrun 2.0\\Tomcat#{node.tomcat.base_version}\\Parameters\\Java" do
+      values [{
+        :name => 'Options',
+        :type => :multi_string,
+        :data => java_opts
+      }]
+      recursive true
+      notifies :restart, "service[#{instance}]", :delayed
+    end
   else
     template "/etc/default/#{instance}" do
       source 'default_tomcat.erb'
@@ -207,78 +281,137 @@ action :configure do
       keystore_type: new_resource.keystore_type,
       tomcat_auth: new_resource.tomcat_auth,
       client_auth: new_resource.client_auth,
-      config_dir: new_resource.config_dir
+      config_dir: new_resource.config_dir,
+      app_base: new_resource.app_base,
+      ldap_enabled: new_resource.ldap_enabled,
+      ldap_servers: new_resource.ldap_servers,
+      ldap_port: new_resource.ldap_port,
+      ldap_bind_user: new_resource.ldap_bind_user,
+      ldap_bind_pwd: new_resource.ldap_bind_pwd,
+      ldap_user_base: new_resource.ldap_user_base,
+      ldap_role_base: new_resource.ldap_role_base,
+      ldap_domain_name: new_resource.ldap_domain_name,
+      ldap_group: new_resource.ldap_group,
+      ldap_user_search: new_resource.ldap_user_search,
+      ldap_role_search: new_resource.ldap_role_search
     )
-    owner 'root'
-    group 'root'
-    mode '0644'
+    owner new_resource.user if node.platform_family != 'windows'
+    group new_resource.group if node.platform_family != 'windows'
+    mode '0644' if node.platform_family != 'windows'
+    notifies :restart, "service[#{instance}]"
+  end
+
+  if platform_family?('windows')
+    # Needs to run every time - requires re-factoring. Creating a definition and trying to rescue the definition call still doesn't work    
+    if !::File.exists?("#{new_resource.config_dir}\\first_run")
+      execute "echo restarting #{instance}" do
+        notifies :stop, "service[#{instance}]", :immediately
+      end
+
+      execute "powershell -Command \"& {rm #{new_resource.config_dir}/web.xml}\"" do
+        notifies :create, "file[#{new_resource.config_dir}\\first_run]", :immediately
+      end
+
+      # file "#{new_resource.config_dir}\\web.xml" do 
+      # action :delete
+      # end
+
+      file "#{new_resource.config_dir}\\first_run" do
+        action :nothing
+      end
+    end
+  end
+
+  template "#{new_resource.config_dir}/web.xml" do
+    source 'web.xml.erb'
+    owner new_resource.user if node.platform_family != 'windows'
+    group new_resource.group if node.platform_family != 'windows'
+    mode '0644' if node.platform_family != 'windows'
+    notifies :restart, "service[#{instance}]"
+    variables(
+      cors_enabled: new_resource.cors_enabled,
+      redirect_http_to_https: new_resource.redirect_http_to_https
+    )
+  end
+
+  template "#{new_resource.config_dir}/context.xml" do
+    source 'context.xml.erb'
+    variables(
+      jndi: new_resource.jndi,
+      jndi_connections: new_resource.jndi_connections
+    )
+    owner new_resource.user if node.platform_family != 'windows'
+    group new_resource.group if node.platform_family != 'windows'
+    mode '0644' if node.platform_family != 'windows'
     notifies :restart, "service[#{instance}]"
   end
 
   template "#{new_resource.config_dir}/logging.properties" do
     source 'logging.properties.erb'
-    owner 'root'
-    group 'root'
-    mode '0644'
+    owner new_resource.user if node.platform_family != 'windows'
+    group new_resource.group if node.platform_family != 'windows'
+    mode '0644' if node.platform_family != 'windows'
     notifies :restart, "service[#{instance}]"
   end
 
-  if new_resource.ssl_cert_file.nil?
-    execute 'Create Tomcat SSL certificate' do
-      group new_resource.group
-      command <<-EOH
-        #{node['tomcat']['keytool']} \
-         -genkey \
-         -keystore "#{new_resource.config_dir}/#{new_resource.keystore_file}" \
-         -storepass "#{node['tomcat']['keystore_password']}" \
-         -keypass "#{node['tomcat']['keystore_password']}" \
-         -dname "#{node['tomcat']['certificate_dn']}" \
-         -keyalg "RSA"
-      EOH
-      umask 0007
-      creates "#{new_resource.config_dir}/#{new_resource.keystore_file}"
-      action :run
-      notifies :restart, "service[#{instance}]"
-    end
-  else
-    script "create_keystore-#{instance}" do
-      interpreter 'bash'
-      action :nothing
-      cwd new_resource.config_dir
-      code <<-EOH
-        cat #{new_resource.ssl_chain_files.join(' ')} > cacerts.pem
-        openssl pkcs12 -export \
-         -inkey #{new_resource.ssl_key_file} \
-         -in #{new_resource.ssl_cert_file} \
-         -chain \
-         -CAfile cacerts.pem \
-         -password pass:#{node['tomcat']['keystore_password']} \
-         -out #{new_resource.keystore_file}
-      EOH
-      notifies :restart, "service[#{instance}]"
-    end
+  if new_resource.generate_ssl_cert
+    if new_resource.ssl_cert_file.nil?
+      execute 'Create Tomcat SSL certificate' do
+        group new_resource.group
+        command <<-EOH
+          #{node['tomcat']['keytool']} \
+           -genkey \
+           -keystore "#{new_resource.config_dir}/#{new_resource.keystore_file}" \
+           -storepass "#{node['tomcat']['keystore_password']}" \
+           -keypass "#{node['tomcat']['keystore_password']}" \
+           -dname "#{node['tomcat']['certificate_dn']}" \
+           -keyalg "RSA"
+        EOH
+        umask 0007 if node.platform_family != 'windows'
+        creates "#{new_resource.config_dir}/#{new_resource.keystore_file}"
+        action :run
+        notifies :restart, "service[#{instance}]"
+      end
+    else
+      script "create_keystore-#{instance}" do
+        interpreter 'bash'
+        action :nothing
+        cwd new_resource.config_dir
+        code <<-EOH
+          cat #{new_resource.ssl_chain_files.join(' ')} > cacerts.pem
+          openssl pkcs12 -export \
+           -inkey #{new_resource.ssl_key_file} \
+           -in #{new_resource.ssl_cert_file} \
+           -chain \
+           -CAfile cacerts.pem \
+           -password pass:#{node['tomcat']['keystore_password']} \
+           -out #{new_resource.keystore_file}
+        EOH
+        notifies :restart, "service[#{instance}]"
+      end
 
-    cookbook_file "#{new_resource.config_dir}/#{new_resource.ssl_cert_file}" do
-      mode '0644'
-      notifies :run, "script[create_keystore-#{instance}]"
-    end
-
-    cookbook_file "#{new_resource.config_dir}/#{new_resource.ssl_key_file}" do
-      mode '0644'
-      notifies :run, "script[create_keystore-#{instance}]"
-    end
-
-    new_resource.ssl_chain_files.each do |cert|
-      cookbook_file "#{new_resource.config_dir}/#{cert}" do
-        mode '0644'
+      cookbook_file "#{new_resource.config_dir}/#{new_resource.ssl_cert_file}" do
+        mode '0644' if node.platform_family != 'windows'
         notifies :run, "script[create_keystore-#{instance}]"
       end
-    end
-  end
 
-  unless new_resource.truststore_file.nil?
-    cookbook_file "#{new_resource.config_dir}/#{new_resource.truststore_file}" do
-      mode '0644'
+      cookbook_file "#{new_resource.config_dir}/#{new_resource.ssl_key_file}" do
+        mode '0644' if node.platform_family != 'windows'
+        notifies :run, "script[create_keystore-#{instance}]"
+      end
+
+      new_resource.ssl_chain_files.each do |cert|
+        cookbook_file "#{new_resource.config_dir}/#{cert}" do
+          mode '0644' if node.platform_family != 'windows'
+          notifies :run, "script[create_keystore-#{instance}]"
+        end
+      end
+    end
+
+    unless new_resource.truststore_file.nil?
+      cookbook_file "#{new_resource.config_dir}/#{new_resource.truststore_file}" do
+        mode '0644' if node.platform_family != 'windows'
+      end
     end
   end
 

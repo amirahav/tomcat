@@ -24,7 +24,9 @@
      Documentation at /docs/config/server.html
  -->
 <Server port="<%= @shutdown_port %>" shutdown="SHUTDOWN">
-
+<% if node['tomcat']['install_method'] == 'archive' %>
+  <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+<% end %>
   <!--APR library loader. Documentation at /docs/apr.html -->
   <!--
   <Listener className="org.apache.catalina.core.AprLifecycleListener" SSLEngine="on" />
@@ -113,7 +115,11 @@
          This connector uses the JSSE configuration, when using APR, the
          connector should be using the OpenSSL style configuration
          described in the APR documentation -->
+<% if node["tomcat"]["base_version"].to_i == 8 %>
+    <Connector port="<%= @ssl_port %>" protocol="org.apache.coyote.http11.Http11NioProtocol"
+<% else %>
     <Connector port="<%= @ssl_port %>" protocol="HTTP/1.1" SSLEnabled="true"
+<% end %>
              <% if @ssl_proxy_port -%>
                proxyPort="<%= @ssl_proxy_port %>"
              <% end -%>
@@ -169,18 +175,36 @@
       <!--
       <Valve className="org.apache.catalina.valves.RequestDumperValve"/>
       -->
+      <Realm className="org.apache.catalina.realm.LockOutRealm">
 
       <!-- This Realm uses the UserDatabase configured in the global JNDI
            resources under the key "UserDatabase".  Any edits
            that are performed against this UserDatabase are immediately
            available for use by the Realm.  -->
+	<% if @ldap_enabled %>
+        <Realm className="org.apache.catalina.realm.JNDIRealm" debug="99"
+			   connectionURL="ldap://<%= @ldap_servers.first %>:<%= @ldap_port %>"
+			 <% if @ldap_servers.size > 1 %>
+			   alternateURL="ldap://<%= @ldap_servers[1] %>:<%= @ldap_port %>"
+			 <% end %>
+			   connectionName="<%= @ldap_bind_user %>@<%= @ldap_domain_name %>"
+			   connectionPassword='<%= @ldap_bind_pwd %>'
+			   referrals="follow"
+			   userBase="<%= @ldap_user_base %>"
+			   userSearch="<%= @ldap_user_search %>"
+			   userSubtree="true" 
+			   roleBase="<%= @ldap_role_base %>"
+			   roleName="cn"
+			   roleSearch="<%= @ldap_role_search %>"
+			   roleSubtree="true"
+        />
+	<% else %>
       <Realm className="org.apache.catalina.realm.UserDatabaseRealm"
              resourceName="UserDatabase"/>
+	<% end %>
+      </Realm>
 
-      <!-- Define the default virtual host
-           Note: XML Schema validation will not work with Xerces 2.2.
-       -->
-      <Host name="localhost"  appBase="webapps"
+      <Host name="localhost"  appBase="<%= node.tomcat.app_base %>"
             unpackWARs="true" autoDeploy="true"
             <% if node['tomcat']['base_version'].to_i.between?(1, 6) -%>
             xmlValidation="false" xmlNamespaceAware="false"
@@ -197,7 +221,7 @@
              Documentation at: /docs/config/valve.html -->
         <!--
         <Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
-               prefix="localhost_access_log." suffix=".txt" pattern="common" resolveHosts="false"/>
+               prefix="localhost_access_log" suffix=".txt" pattern="common"  resolveHosts="false"/>
         -->
 
       </Host>

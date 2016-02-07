@@ -46,7 +46,13 @@ attribute :context_dir,
   kind_of: String
 attribute :webapp_dir,
   kind_of: String
-
+attribute :app_base,
+  kind_of: String
+attribute :jndi_connections,
+  kind_of: Array
+attribute :jndi,
+  kind_of: String,
+  equal_to: %w(true false)
 attribute :catalina_options,
   kind_of: String
 attribute :java_options,
@@ -60,6 +66,8 @@ attribute :max_threads,
   kind_of: Fixnum
 attribute :ssl_max_threads,
   kind_of: Fixnum
+attribute :generate_ssl_cert,
+  kind_of: String
 attribute :ssl_cert_file,
   kind_of: String
 attribute :ssl_key_file,
@@ -83,6 +91,35 @@ attribute :loglevel,
 attribute :tomcat_auth,
   kind_of: String,
   equal_to: %w(true false)
+attribute :cors_enabled,
+  kind_of: String,
+  equal_to: %w(true false)
+attribute :redirect_http_to_https,
+  kind_of: String,
+  equal_to: %w(true false)
+attribute :ldap_enabled,
+  kind_of: String,
+  equal_to: %w(true false)
+attribute :ldap_servers,
+  kind_of: Array
+attribute :ldap_port,
+  kind_of: Fixnum
+attribute :ldap_bind_user,
+  kind_of: String
+attribute :ldap_bind_pwd,
+  kind_of: String
+attribute :ldap_user_base,
+  kind_of: String
+attribute :ldap_role_base,
+  kind_of: String
+attribute :ldap_domain_name,
+  kind_of: String
+attribute :ldap_group,
+  kind_of: String
+attribute :ldap_user_search,
+  kind_of: String
+attribute :ldap_role_search,
+  kind_of: String
 
 attribute :user,
   kind_of: String

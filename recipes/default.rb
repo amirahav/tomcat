@@ -20,16 +20,141 @@
 # required for the secure_password method from the openssl cookbook
 ::Chef::Recipe.send(:include, Opscode::OpenSSL::Password)
 
-# RHEL systems prior to 7 need the EPEL repository setup
-if node['tomcat']['base_version'].to_i == 7
-  if platform_family?('rhel') && node['platform_version'].to_i < 7
-    include_recipe 'yum-epel'
+if node['tomcat']['install_method'] == 'package'
+  def package_installation
+    # RHEL systems prior to 7 need the EPEL repository setup
+    if node['tomcat']['base_version'].to_i == 7
+      if platform_family?('rhel') && node['platform_version'].to_i < 7
+        include_recipe 'yum-epel'
+      end
+    end
+
+    package node['tomcat']['packages']
+    package node['tomcat']['deploy_manager_packages']
+  end
+
+  case node['platform']
+    when 'centos', 'redhat'
+      if node['platform_version'].to_i == 6
+        if node['tomcat']['base_version'].to_i == 6
+          package_installation
+        elsif node['tomcat']['base_version'].to_i == 7
+          package_installation
+        else
+          Chef::Log.info("Tomcat package version #{node['tomcat']['base_version'].to_i} not supported on #{node['platform']} #{node['platform_version'].to_i}")
+        end
+      elsif node['platform_version'].to_i == 7
+        if node['tomcat']['base_version'].to_i == 7
+          package_installation
+        else
+          Chef::Log.info("Tomcat package version #{node['tomcat']['base_version'].to_i} not supported on #{node['platform']} #{node['platform_version'].to_i} ")
+        end
+      end
+    when 'windows'
+      Chef::Log.info("Tomcat package installation not supported on #{node['platform']}")
+    else
+      package_installation
+  end
+elsif node['tomcat']['install_method'] == 'archive'
+  case node['platform']
+    when "windows"
+      windows_zipfile node.tomcat.home do
+        source node['tomcat']['archive_url']
+        action :unzip
+        not_if { File.exists?("#{node.tomcat.home}\\conf") }
+        not_if { File.exists?("#{node.tomcat.home}\\#{node.tomcat.version}\\conf") }
+      end
+
+      execute "powershell -Command \"& {robocopy #{node.tomcat.home}\\#{node.tomcat.version} #{node.tomcat.home} /e /move}\"" do
+        only_if { File.exists?("#{node.tomcat.home}\\#{node.tomcat.version}\\conf") }
+      end
+
+      directory "#{node.tomcat.home}\\#{node.tomcat.version}" do
+        action :delete
+      end
+
+      execute "service install" do
+        cwd "#{node.tomcat.home}\\bin"
+        not_if "sc qc tomcat#{node.tomcat.base_version} | findstr tomcat#{node.tomcat.base_version}"
+      end
+    else
+      group node['tomcat']['group']
+
+      user node['tomcat']['user'] do
+        gid node['tomcat']['group']
+        shell '/bin/false'
+      end
+
+      tomcat_archive_path = "#{Chef::Config[:file_cache_path]}/tomcat#{node['tomcat']['base_version'].to_i}.tar.gz"
+      tomcat_temp_path = "#{Chef::Config[:file_cache_path]}/tomcat#{node['tomcat']['base_version'].to_i}"
+
+      remote_file tomcat_archive_path do
+        source node['tomcat']['archive_url']
+      end
+
+      directory tomcat_temp_path
+
+      execute "tar xfz #{tomcat_archive_path} -C #{tomcat_temp_path} --strip-components=1" do
+        not_if { Dir.exists?("#{tomcat_temp_path}/bin") }
+      end
+
+      [node['tomcat']['home'], node['tomcat']['base'], node['tomcat']['config_dir'], node['tomcat']['log_dir'], node['tomcat']['tmp_dir'], node['tomcat']['work_dir'], node['tomcat']['context_dir'],
+       node['tomcat']['webapp_dir'], node['tomcat']['lib_dir'], node['tomcat']['endorsed_dir'], "#{node['tomcat']['home']}/bin", "#{node['tomcat']['home']}/temp", "#{node['tomcat']['home']}/work"].each { |dir|
+        directory dir do
+          owner node['tomcat']['user']
+          group node['tomcat']['group']
+          mode 0755
+          recursive true
+        end
+      }
+
+      execute "cp #{tomcat_temp_path}/conf/* #{node['tomcat']['config_dir']}" do
+        not_if { File.exists?("#{node['tomcat']['config_dir']}/server.xml") }
+        only_if { File.exists?("#{tomcat_temp_path}/conf/server.xml") }
+      end
+
+      execute "cp #{tomcat_temp_path}/bin/* #{node['tomcat']['base']}/bin" do
+        not_if { File.exists?("#{node['tomcat']['base']}/bin/catalina.sh") }
+        only_if { File.exists?("#{tomcat_temp_path}/bin/catalina.sh") }
+      end
+
+      execute "cp #{tomcat_temp_path}/lib/* #{node['tomcat']['base']}/lib" do
+        not_if { File.exists?("#{node['tomcat']['base']}/lib/tomcat-util.jar") }
+        only_if { File.exists?("#{tomcat_temp_path}/lib/tomcat-util.jar") }
+      end
+
+      execute "cp -r #{tomcat_temp_path}/webapps/* #{node['tomcat']['webapp_dir']}" do
+        not_if { Dir.exists?("#{node['tomcat']['webapp_dir']}/ROOT") }
+        only_if { Dir.exists?("#{tomcat_temp_path}/webapps/ROOT") }
+      end
+
+      execute "find #{node['tomcat']['base']} -type d -exec chmod 755 {} +; find #{node['tomcat']['base']} -type f -exec chmod 644 {} +; chown -R #{node['tomcat']['user']}:#{node['tomcat']['group']} #{node['tomcat']['base']} #{node['tomcat']['config_dir']}" do
+        returns [0, 1]
+      end
+
+      execute "find #{node['tomcat']['base']}/bin -type f -name '*.sh' -exec chmod 755 {} +" do
+        returns [0, 1]
+      end
+
+      link "#{node['tomcat']['home']}/logs" do
+        to node['tomcat']['log_dir']
+      end
+
+      link "#{node['tomcat']['home']}/conf" do
+        to node['tomcat']['config_dir']
+      end
+
+      template "/etc/logrotate.d/#{node['tomcat']['base_instance']}" do
+        source "logrotate.erb"
+        mode 0644
+      end
+
+      template "/etc/rc.d/init.d/#{node['tomcat']['base_instance']}" do
+        source "initd.erb"
+        mode 0755
+      end
   end
 end
-
-package node['tomcat']['packages']
-
-package node['tomcat']['deploy_manager_packages']
 
 # remove the manager apps unless the attribute is set
 unless node['tomcat']['deploy_manager_apps']
@@ -54,6 +179,7 @@ end
 
 node.set_unless['tomcat']['keystore_password'] = secure_password
 node.set_unless['tomcat']['truststore_password'] = secure_password
+node.save
 
 def create_service(instance)
   service instance do
@@ -90,6 +216,7 @@ if node['tomcat']['run_base_instance']
     secure node['tomcat']['secure']
     scheme node['tomcat']['scheme']
     ssl_port node['tomcat']['ssl_port']
+    app_base node['tomcat']['app_base']
     ssl_proxy_port node['tomcat']['ssl_proxy_port']
     ajp_port node['tomcat']['ajp_port']
     ajp_redirect_port node['tomcat']['ajp_redirect_port']
@@ -118,12 +245,14 @@ node['tomcat']['instances'].each do |name, attrs|
     work_dir attrs['work_dir']
     context_dir attrs['context_dir']
     webapp_dir attrs['webapp_dir']
+    app_base attrs['app_base']
     catalina_options attrs['catalina_options']
     java_options attrs['java_options']
     use_security_manager attrs['use_security_manager']
     authbind attrs['authbind']
     max_threads attrs['max_threads']
     ssl_max_threads attrs['ssl_max_threads']
+    generate_ssl_cert attrs['generate_ssl_cert']
     ssl_cert_file attrs['ssl_cert_file']
     ssl_key_file attrs['ssl_key_file']
     ssl_chain_files attrs['ssl_chain_files']
@@ -144,6 +273,21 @@ node['tomcat']['instances'].each do |name, attrs|
     endorsed_dir attrs['endorsed_dir']
     ajp_packetsize attrs['ajp_packetsize']
     uriencoding attrs['uriencoding']
+    jndi_connections attrs['jndi_connections']
+    jndi attrs['jndi']
+    cors_enabled attrs['cors_enabled']
+    redirect_http_to_https attrs['redirect_http_to_https']
+    ldap_enabled attrs['ldap_enabled']
+    ldap_servers attrs['ldap_servers']
+    ldap_port attrs['ldap_port']
+    ldap_bind_user attrs['ldap_bind_user']
+    ldap_bind_pwd attrs['ldap_bind_pwd']
+    ldap_user_base attrs['ldap_user_base']
+    ldap_role_base attrs['ldap_role_base']
+    ldap_domain_name attrs['ldap_domain_name']
+    ldap_group attrs['ldap_group']
+    ldap_user_search attrs['ldap_user_search']
+    ldap_role_search attrs['ldap_role_search']
   end
 
   instance = "#{node['tomcat']['base_instance']}-#{name}"
@@ -151,6 +295,7 @@ node['tomcat']['instances'].each do |name, attrs|
 end
 
 execute "wait for #{instance}" do
-  command 'sleep 5'
+  command 'sleep 5' if node.platform_family != 'windows'
+  command 'powershell -Command "& {sleep 5}"' if node.platform_family == 'windows'
   action :nothing
 end
