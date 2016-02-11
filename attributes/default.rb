@@ -15,8 +15,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+case node['platform']
+when "centos", "redhat"
+  default['tomcat']['base_version'] = 8
+when "debian", "ubuntu"
+  default['tomcat']['base_version'] = 7
+else
+  default['tomcat']['base_version'] = 6
+end
 
-default['tomcat']['base_version'] = 8
 default['tomcat']['base_instance'] = "tomcat#{node['tomcat']['base_version']}"
 default['tomcat']['port'] = 8080
 default['tomcat']['proxy_port'] = nil
