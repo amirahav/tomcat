@@ -179,7 +179,7 @@ end
 
 node.set_unless['tomcat']['keystore_password'] = secure_password
 node.set_unless['tomcat']['truststore_password'] = secure_password
-node.save
+node.save unless Chef::Config[:solo]
 
 def create_service(instance)
   service instance do
