@@ -177,9 +177,14 @@ unless node['tomcat']['deploy_manager_apps']
   end
 end
 
-node.set_unless['tomcat']['keystore_password'] = secure_password
-node.set_unless['tomcat']['truststore_password'] = secure_password
-node.save unless Chef::Config[:solo]
+if Chef::Config[:solo]
+  node.set_unless['tomcat']['keystore_password'] = "cBVDSFirda72DXTK8ecp"
+  node.set_unless['tomcat']['truststore_password'] = "cBVDSFirda72DXTK8ecp"
+else
+  node.set_unless['tomcat']['keystore_password'] = secure_password
+  node.set_unless['tomcat']['truststore_password'] = secure_password
+  node.save
+end
 
 def create_service(instance)
   service instance do
