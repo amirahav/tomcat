@@ -16,7 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 case node['platform']
-when "centos", "redhat"
+when "centos", "redhat", "oracle"
   default['tomcat']['base_version'] = 8
 when "debian", "ubuntu"
   default['tomcat']['base_version'] = 7
@@ -57,13 +57,10 @@ default['tomcat']['keystore_type'] = 'jks'
 # not otherwise set. Do not hardcode passwords in the cookbook.
 # default['tomcat']["keystore_password'] = nil
 # default['tomcat']["truststore_password'] = nil
-if node['tomcat']['base_version'] == 8
-  default['tomcat']['install_method'] = 'archive'
-else
-  default['tomcat']['install_method'] = 'package'
-end
+default['tomcat']['install_method'] = node['tomcat']['base_version'] == 8 ? 'archive' : 'package'
 default['tomcat']['archive_url'] = "https://s3.amazonaws.com/boundlessps-public/apache-tomcat-7.0.67.tar.gz" if node['tomcat']['base_version'] == 7
-default['tomcat']['archive_url'] = "https://s3.amazonaws.com/boundlessps-public/apache-tomcat-8.0.30.tar.gz" if node['tomcat']['base_version'] == 8
+default['tomcat']['archive_url'] = "https://s3.amazonaws.com/boundlessps-public/apache-tomcat-8.0.32.tar.gz" if node['tomcat']['base_version'] == 8
+default['tomcat']['deploy_default_webapps'] = true
 default['tomcat']['truststore_file'] = nil
 default['tomcat']['truststore_type'] = 'jks'
 default['tomcat']['certificate_dn'] = 'cn=localhost'

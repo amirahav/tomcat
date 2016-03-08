@@ -123,9 +123,11 @@ elsif node['tomcat']['install_method'] == 'archive'
         only_if { File.exists?("#{tomcat_temp_path}/lib/tomcat-util.jar") }
       end
 
-      execute "cp -r #{tomcat_temp_path}/webapps/* #{node['tomcat']['webapp_dir']}" do
-        not_if { Dir.exists?("#{node['tomcat']['webapp_dir']}/ROOT") }
-        only_if { Dir.exists?("#{tomcat_temp_path}/webapps/ROOT") }
+      if node['tomcat']['deploy_default_webapps']
+        execute "cp -r #{tomcat_temp_path}/webapps/* #{node['tomcat']['webapp_dir']}" do
+          not_if { Dir.exists?("#{node['tomcat']['webapp_dir']}/ROOT") }
+          only_if { Dir.exists?("#{tomcat_temp_path}/webapps/ROOT") }
+        end
       end
 
       execute "find #{node['tomcat']['base']} -type d -exec chmod 755 {} +; find #{node['tomcat']['base']} -type f -exec chmod 644 {} +; chown -R #{node['tomcat']['user']}:#{node['tomcat']['group']} #{node['tomcat']['base']} #{node['tomcat']['config_dir']}" do
