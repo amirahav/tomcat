@@ -24,6 +24,7 @@ else
   default['tomcat']['base_version'] = 6
 end
 
+default['tomcat']['access_log_pattern'] = 'common'
 default['tomcat']['base_instance'] = "tomcat#{node['tomcat']['base_version']}"
 default['tomcat']['port'] = 8080
 default['tomcat']['proxy_port'] = nil

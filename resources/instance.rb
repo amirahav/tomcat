@@ -120,6 +120,8 @@ attribute :ldap_user_search,
   kind_of: String
 attribute :ldap_role_search,
   kind_of: String
+attribute :access_log_pattern,
+  kind_of: String
 
 attribute :user,
   kind_of: String

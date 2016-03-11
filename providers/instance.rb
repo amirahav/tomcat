@@ -11,7 +11,7 @@ action :configure do
    :group, :tmp_dir, :lib_dir, :endorsed_dir, :jndi_connections, :jndi, :cors_enabled, :redirect_http_to_https,
    :app_base, :ldap_enabled, :ldap_servers, :ldap_port, :ldap_bind_user, :ldap_bind_pwd,
    :ldap_user_base, :ldap_role_base, :ldap_domain_name, :ldap_group, :ldap_user_search,
-   :ldap_role_search].each do |attr|
+   :ldap_role_search, :access_log_pattern].each do |attr|
     unless new_resource.instance_variable_get("@#{attr}")
       new_resource.instance_variable_set("@#{attr}", node['tomcat'][attr])
     end
@@ -293,7 +293,8 @@ action :configure do
       ldap_domain_name: new_resource.ldap_domain_name,
       ldap_group: new_resource.ldap_group,
       ldap_user_search: new_resource.ldap_user_search,
-      ldap_role_search: new_resource.ldap_role_search
+      ldap_role_search: new_resource.ldap_role_search,
+      access_log_pattern: new_resource.access_log_pattern
     )
     owner new_resource.user if node.platform_family != 'windows'
     group new_resource.group if node.platform_family != 'windows'

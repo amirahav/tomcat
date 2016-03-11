@@ -118,11 +118,12 @@
 <% if node["tomcat"]["base_version"].to_i == 8 %>
     <Connector port="<%= @ssl_port %>" protocol="org.apache.coyote.http11.Http11NioProtocol"
 <% else %>
-    <Connector port="<%= @ssl_port %>" protocol="HTTP/1.1" SSLEnabled="true"
+    <Connector port="<%= @ssl_port %>" protocol="HTTP/1.1"
 <% end %>
              <% if @ssl_proxy_port -%>
                proxyPort="<%= @ssl_proxy_port %>"
              <% end -%>
+               SSLEnabled="true"
                keystoreFile="<%= @config_dir %>/<%= @keystore_file %>"
                keystorePass="<%= node['tomcat']['keystore_password'] %>"
                keystoreType="<%= @keystore_type %>"
@@ -219,10 +220,9 @@
 
         <!-- Access log processes all example.
              Documentation at: /docs/config/valve.html -->
-        <!--
+
         <Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
-               prefix="localhost_access_log" suffix=".txt" pattern="common"  resolveHosts="false"/>
-        -->
+               prefix="access_log" suffix="" pattern="<%= @access_log_pattern %>"  resolveHosts="false"/>
 
       </Host>
     </Engine>
