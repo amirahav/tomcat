@@ -25,6 +25,7 @@ property :tomcat_group, kind_of: String, default: lazy { |r| "tomcat_#{r.instanc
 property :env_vars, Array, default: [
   { 'CATALINA_PID' => '$CATALINA_BASE/bin/tomcat.pid' }
 ]
+property :service_vars, Array
 property :sensitive, kind_of: [TrueClass, FalseClass], default: false
 
 action :start do
@@ -85,6 +86,7 @@ action_class.class_eval do
       variables(
         instance: new_resource.instance_name,
         env_vars: new_resource.env_vars,
+        service_vars: new_resource.service_vars,
         install_path: derived_install_path,
         user: new_resource.tomcat_user,
         group: new_resource.tomcat_group

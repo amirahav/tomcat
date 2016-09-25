@@ -13,6 +13,14 @@ Environment="<%= k -%>=<%= v %>"
   <% end -%>
 <% end -%>
 
+<% if !@service_vars.empty? -%>
+  <% @service_vars.each do |h| -%>
+    <% h.each_pair do |k,v| -%>
+<%= k -%>=<%= v %>
+    <% end -%>
+  <% end -%>
+<% end -%>
+
 ExecStart=<%= @install_path %>/bin/catalina.sh run
 ExecStop=<%= @install_path %>/bin/catalina.sh stop
 Restart=on-failure
