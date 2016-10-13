@@ -21,8 +21,8 @@ Environment="<%= k -%>=<%= v %>"
   <% end -%>
 <% end -%>
 
-ExecStart=<%= @install_path %>/bin/catalina.sh run
-ExecStop=<%= @install_path %>/bin/catalina.sh stop
+ExecStart=<%= @install_path %>/bin/catalina.sh run >> <%= @install_path %>/logs/catalina.out 2>&1
+ExecStop=<%= @install_path %>/bin/catalina.sh stop >> <%= @install_path %>/logs/catalina.out 2>&1
 Restart=on-failure
 RestartSec=2
 
