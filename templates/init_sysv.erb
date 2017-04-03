@@ -75,6 +75,8 @@ fi
 # See how we were called.
 function start() {
 
+   ulimit -n 65535
+
    echo -n "Starting ${NAME}: "
    if [ "$RETVAL" != "0" ]; then
      log_failure_msg

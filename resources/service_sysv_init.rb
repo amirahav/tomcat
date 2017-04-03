@@ -103,7 +103,7 @@ action_class.class_eval do
       source 'setenv.erb'
       mode '0755'
       cookbook 'tomcat'
-      sensitive new_resource.sensitive
+      sensitive true
       notifies :restart, "service[tomcat_#{new_resource.instance_name}]"
       variables(
         env_vars: new_resource.env_vars
