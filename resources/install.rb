@@ -1,3 +1,22 @@
+#
+# Cookbook:: tomcat
+# Resource:: install
+#
+# Copyright:: 2016-2017, Chef Software, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 property :instance_name, String, name_property: true
 property :version, String, default: '8.0.36'
 property :install_path, String, default: lazy { |r| "/opt/tomcat_#{r.instance_name}_#{r.version.tr('.', '_')}/" }
@@ -31,10 +50,9 @@ action_class do
 
   # ensure the version is X.Y.Z format
   def validate_version
-    unless new_resource.version =~ /\d+.\d+.\d+/
-      Chef::Log.fatal("The version must be in X.Y.Z format. Passed value: #{new_resource.version}")
-      raise
-    end
+    return if new_resource.version =~ /\d+.\d+.\d+/
+    Chef::Log.fatal("The version must be in X.Y.Z format. Passed value: #{new_resource.version}")
+    raise
   end
 
   # fetch the md5 checksum from the mirrors

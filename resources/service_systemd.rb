@@ -1,21 +1,26 @@
+#
+# Cookbook:: tomcat
+# Resource:: service_systemd
+#
+# Copyright:: 2016-2017, Chef Software, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 provides :tomcat_service_systemd
 
-provides :tomcat_service, platform: 'fedora'
-
-provides :tomcat_service, platform: %w(redhat centos scientific oracle) do |node| # ~FC005
-  node['platform_version'].to_f >= 7.0
-end
-
-provides :tomcat_service, platform: 'debian' do |node|
-  node['platform_version'].to_i >= 8
-end
-
-provides :tomcat_service, platform_family: 'suse' do |node|
-  node['platform_version'].to_f >= 13.0
-end
-
-provides :tomcat_service, platform: 'ubuntu' do |node|
-  node['platform_version'].to_f >= 15.10
+provides :tomcat_service, os: 'linux' do |_node|
+  Chef::Platform::ServiceHelpers.service_resource_providers.include?(:systemd)
 end
 
 property :instance_name, String, name_property: true
@@ -23,10 +28,9 @@ property :install_path, String
 property :tomcat_user, String, default: lazy { |r| "tomcat_#{r.instance_name}" }
 property :tomcat_group, String, default: lazy { |r| "tomcat_#{r.instance_name}" }
 property :env_vars, Array, default: [
-  { 'CATALINA_PID' => '$CATALINA_BASE/bin/tomcat.pid' }
+  { 'CATALINA_PID' => '$CATALINA_BASE/bin/tomcat.pid' },
 ]
 property :service_vars, Array
-property :sensitive, [true, false], default: false
 
 action :start do
   create_init
@@ -82,7 +86,7 @@ action_class.class_eval do
 
     template "/etc/systemd/system/tomcat_#{instance_name}.service" do
       source 'init_systemd.erb'
-      sensitive new_resource.sensitive
+      sensitive true
       variables(
         instance: new_resource.instance_name,
         env_vars: new_resource.env_vars,
