@@ -30,6 +30,7 @@ property :exclude_hostmanager, [true, false], default: false
 property :tarball_uri, String
 property :tomcat_user, String, default: lazy { |r| "tomcat_#{r.instance_name}" }
 property :tomcat_group, String, default: lazy { |r| "tomcat_#{r.instance_name}" }
+property :verify_checksum, [true, false], default: true
 
 action_class do
   # break apart the version string to find the major version
@@ -140,7 +141,7 @@ action :install do
   remote_file "apache #{new_resource.version} tarball" do
     source tarball_uri
     path "#{Chef::Config['file_cache_path']}/apache-tomcat-#{new_resource.version}.tar.gz"
-    verify { |file| validate_checksum(file) }
+    verify { |file| validate_checksum(file) } if new_resource.verify_checksum
   end
 
   execute 'extract tomcat tarball' do
