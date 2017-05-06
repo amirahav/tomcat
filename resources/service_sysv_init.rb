@@ -76,10 +76,9 @@ action :disable do
 end
 
 action_class.class_eval do
-  def create_init
-    # set the CATALINA_BASE value unless the user has passed it
-    ensure_catalina_base
+  include ::TomcatCookbook::ServiceHelpers
 
+  def create_init
     # suse is missing libraries we need for sys-v
     package 'perl-Getopt-Long-Descriptive' if platform_family?('suse')
 
@@ -106,7 +105,7 @@ action_class.class_eval do
       sensitive true
       notifies :restart, "service[tomcat_#{new_resource.instance_name}]"
       variables(
-        env_vars: new_resource.env_vars
+        env_vars: envs_with_catalina_base
       )
     end
 

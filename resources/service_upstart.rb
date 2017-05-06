@@ -80,9 +80,9 @@ action :disable do
 end
 
 action_class.class_eval do
-  def create_init
-    ensure_catalina_base
+  include ::TomcatCookbook::ServiceHelpers
 
+  def create_init
     template "/etc/init/tomcat_#{new_resource.instance_name}.conf" do
       source 'init_upstart.erb'
       sensitive new_resource.sensitive
@@ -91,7 +91,7 @@ action_class.class_eval do
         user: new_resource.tomcat_user,
         group: new_resource.tomcat_group,
         instance: new_resource.instance_name,
-        env_vars: new_resource.env_vars,
+        env_vars: envs_with_catalina_base,
         install_path: derived_install_path
       )
       cookbook 'tomcat'
